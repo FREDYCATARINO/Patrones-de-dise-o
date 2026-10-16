@@ -1,0 +1,83 @@
+import 'dart:math';
+
+import 'package:ecotrack_patrones/casos/factory.dart';
+import 'package:ecotrack_patrones/casos/dependency_injection.dart';
+import 'package:ecotrack_patrones/casos/adapter.dart';
+import 'package:ecotrack_patrones/casos/observer.dart';
+import 'package:ecotrack_patrones/casos/strategy.dart';
+import 'package:ecotrack_patrones/casos/repository.dart';
+import 'package:ecotrack_patrones/main.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  testWidgets('cada patron del menu abre su pantalla', (tester) async {
+    final casos = <(String, Type)>[
+      ('Factory', PantallaAviso),
+      ('Inyección de dependencias', PantallaLab),
+      ('Adapter', PantallaMedidor),
+      ('Repository', PantallaConsumo),
+      ('Observer', PantallaPaneles),
+      ('Strategy', PantallaTope),
+    ];
+
+    await tester.pumpWidget(
+      EcoTrackApp(
+        almacen: ConsumoEnMemoria(),
+        lector: LectorMedidor(MedidorLegado(azar: Random(1))),
+      ),
+    );
+
+    for (final (nombre, pantalla) in casos) {
+      final opcion = find.text(nombre);
+      await tester.scrollUntilVisible(
+        opcion,
+        150,
+        scrollable: find.byType(Scrollable),
+      );
+      await tester.tap(opcion);
+      await tester.pumpAndSettle();
+      expect(find.byType(pantalla), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+    }
+  });
+  test('el texto del medidor sale como double', () {
+    final lector = LectorMedidor(MedidorLegado(azar: Random(1)));
+    expect(lector.leerLitros(), isA<double>());
+  });
+
+  test('la forma del aviso depende del caso', () {
+    expect(Aviso.paraMeta(ahorrados: 50, meta: 50).cumplida, isTrue);
+    expect(
+      Aviso.paraMeta(ahorrados: 45.5, meta: 50).texto,
+      'Faltan 4.5 L para la meta',
+    );
+  });
+
+  test('el mismo validador, dos reglas', () {
+    expect(ValidadorLectura(TopeAgua()).resultado(800), 'aceptada');
+    expect(ValidadorLectura(TopeLuz()).resultado(800), 'rechazada');
+  });
+
+  testWidgets('historial y meta se enteran al guardar', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: PantallaPaneles()));
+    await tester.tap(find.text('Guardar 12.5 L'));
+    await tester.pump();
+
+    expect(find.text('1 registros'), findsOneWidget);
+    expect(find.text('Quedan 37.5 L'), findsOneWidget);
+  });
+
+  testWidgets('la misma pantalla ensaya el fallo', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: PantallaRegistro(fuente: LabQueFalla())),
+      ),
+    );
+    await tester.tap(find.byType(FilledButton));
+    await tester.pump();
+
+    expect(find.textContaining('Error'), findsOneWidget);
+  });
+}
